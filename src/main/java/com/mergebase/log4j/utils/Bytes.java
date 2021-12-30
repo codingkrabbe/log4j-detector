@@ -1,24 +1,40 @@
-package com.mergebase.log4j;
+package com.mergebase.log4j.utils;
 
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.Charset;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Bytes {
 
     public static final int SIZE_KEY = 0;
     public static final int LAST_READ_KEY = 1;
 
-    public static final Charset UTF_8;
+    private static final Logger logger = Logger.getLogger(Bytes.class.getCanonicalName());
 
-    static {
+    public static String digest(byte[] bytes) {
         try {
-            UTF_8 = Charset.forName("UTF-8");
-        } catch (Exception e) {
-            throw new RuntimeException("could not obtain UTF-8 charset...", e);
+            MessageDigest md = MessageDigest.getInstance("SHA1");
+
+            try (InputStream stream = new ByteArrayInputStream(bytes);
+                 DigestInputStream dis = new DigestInputStream(stream, md)) {
+                while (dis.read() != -1) {
+                    // read the file completely
+                }
+                md = dis.getMessageDigest();
+            }
+
+            StringBuilder result = new StringBuilder();
+            for (byte b : md.digest()) {
+                result.append(String.format("%02x", b));
+            }
+            return result.toString();
+        } catch (NoSuchAlgorithmException | IOException e) {
+            logger.log(Level.WARNING, "Failed to caluclate digest for file, continuing without.", e);
+            return "";
         }
     }
 
@@ -43,30 +59,21 @@ public class Bytes {
     }
 
     public static byte[] fromString(String s) {
-        return s.getBytes(UTF_8);
+        return s.getBytes(StandardCharsets.UTF_8);
     }
 
     public static byte[] streamToBytes(final InputStream in) throws IOException {
-        return streamToBytes(in, true, -1);
+        return streamToBytes(in, true);
     }
 
     public static byte[] streamToBytes(final InputStream in, final boolean doClose) throws IOException {
-        return streamToBytes(in, doClose, true, -1);
-    }
-
-    public static byte[] streamToBytes(final InputStream in, final boolean doClose, final long lengthHint) throws IOException {
-        return streamToBytes(in, doClose, true, lengthHint);
+        return streamToBytes(in, doClose, true);
     }
 
     public static byte[] streamToBytes(
-            final InputStream in, final boolean doClose, final boolean doResize, long lengthHint
+            final InputStream in, final boolean doClose, final boolean doResize
     ) throws IOException {
-        byte[] buf;
-        if (lengthHint > 0) {
-            buf = new byte[(int) lengthHint];
-        } else {
-            buf = new byte[32768];
-        }
+        byte[] buf = new byte[32768];
         try {
             int[] status = fill(buf, 0, in);
             int size = status[SIZE_KEY];
@@ -106,20 +113,6 @@ public class Bytes {
                 read += lastRead;
             }
         }
-
-        if (lastRead != -1 && read + offset == buf.length) {
-            if (in.markSupported()) {
-                in.mark(1);
-                int peek = in.read();
-                if (peek == -1) {
-                    lastRead = -1;
-                } else {
-                    in.reset();
-                }
-            }
-        }
-
-        // If read + offset == buf.length, we are done!
         return new int[]{offset + read, lastRead};
     }
 
@@ -175,11 +168,4 @@ public class Bytes {
         return failure;
     }
 
-    public static void disabledMain(String[] args) throws Exception {
-        String abc = "abc";
-        byte[] bytes = abc.getBytes(UTF_8);
-        ByteArrayInputStream bin = new ByteArrayInputStream(bytes);
-        byte[] result = Bytes.streamToBytes(bin, false, 2);
-        System.out.println("AFTER = [" + new String(result, UTF_8) + "]");
-    }
 }
