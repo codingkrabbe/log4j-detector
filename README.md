@@ -1,4 +1,4 @@
-# Log4j Detector - ${project.version}
+# Log4j Detector - v3.3.0
 Fork of the mergebase/log4j scanner
 
 
